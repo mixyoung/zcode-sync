@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-canvas: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-surface-alt: #f1f5f9;
+  --bg-surface-hover: #e2e8f0;
+  --bg-input: #ffffff;
+  --border-subtle: #e2e8f0;
+  --border-subtle-hover: #cbd5e1;
+  --border-focus: #3b82f6;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+
+  --badge-custom-bg: #ecfdf5;
+  --badge-custom-border: #a7f3d0;
+  --badge-custom-text: #047857;
+
+  --badge-official-bg: #f1f5f9;
+  --badge-official-border: #e2e8f0;
+  --badge-official-text: #475569;
+
+  --scrollbar-track: #f1f5f9;
+  --scrollbar-thumb: #cbd5e1;
+  --scrollbar-thumb-hover: #94a3b8;
+}
+
+.dark {
+  --bg-canvas: #09090b;
+  --bg-surface: #18181b;
+  --bg-surface-alt: #202024;
+  --bg-surface-hover: #27272a;
+  --bg-input: #121215;
+  --border-subtle: #27272a;
+  --border-subtle-hover: #3f3f46;
+  --border-focus: #3b82f6;
+  --text-primary: #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+
+  --badge-custom-bg: rgba(6, 78, 59, 0.8);
+  --badge-custom-border: rgba(52, 211, 153, 0.3);
+  --badge-custom-text: #6ee7b7;
+
+  --badge-official-bg: #27272a;
+  --badge-official-border: #3f3f46;
+  --badge-official-text: #94a3b8;
+
+  --scrollbar-track: #09090b;
+  --scrollbar-thumb: #27272a;
+  --scrollbar-thumb-hover: #3f3f46;
+}
+
+@layer base {
+  body {
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    font-family: "Segoe UI", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+}
+
+/* 现代精密无缝深浅自适应滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}

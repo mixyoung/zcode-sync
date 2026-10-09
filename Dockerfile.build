@@ -1,0 +1,20 @@
+# ==============================================================================
+# Linux ELF 二进制交叉构建镜像
+# 构建命令: docker build -t zcode-builder -f Dockerfile.build .
+# 提取产物: docker run --rm -v $(pwd)/dist:/output zcode-builder cp /app/dist/zcode-model-sync /output/
+# ==============================================================================
+
+FROM python:3.11-slim
+
+# 安装 tkinter 与 build 基础依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-tk \
+    binutils \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir pyinstaller
+
+WORKDIR /app
+COPY . /app
+
+RUN python3 build_executables.py
