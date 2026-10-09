@@ -110,8 +110,17 @@ impl S3Client {
         headers_in.insert("authorization", auth_header.parse().unwrap());
     }
 
+    fn get_normalized_endpoint(&self) -> String {
+        let trimmed = self.config.endpoint.trim();
+        if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+            trimmed.trim_end_matches('/').to_string()
+        } else {
+            format!("https://{}", trimmed.trim_end_matches('/'))
+        }
+    }
+
     fn build_url(&self, key: &str) -> (String, String) {
-        let endpoint = self.config.endpoint.trim_end_matches('/');
+        let endpoint = self.get_normalized_endpoint();
         let bucket = self.config.bucket.trim();
         let clean_key = key.trim_start_matches('/');
         let path = if clean_key.is_empty() {

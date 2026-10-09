@@ -14,8 +14,17 @@ impl WebDavClient {
         Self { config, http_client }
     }
 
+    fn get_normalized_base(&self) -> String {
+        let trimmed = self.config.server_url.trim();
+        if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+            trimmed.trim_end_matches('/').to_string()
+        } else {
+            format!("https://{}", trimmed.trim_end_matches('/'))
+        }
+    }
+
     fn build_file_url(&self, file_name: &str) -> String {
-        let base = self.config.server_url.trim_end_matches('/');
+        let base = self.get_normalized_base();
         let r_dir = self.config.remote_dir.trim_matches('/');
         if r_dir.is_empty() {
             format!("{}/{}", base, file_name.trim_start_matches('/'))
@@ -25,7 +34,7 @@ impl WebDavClient {
     }
 
     fn build_dir_url(&self) -> String {
-        let base = self.config.server_url.trim_end_matches('/');
+        let base = self.get_normalized_base();
         let r_dir = self.config.remote_dir.trim_matches('/');
         if r_dir.is_empty() {
             format!("{}/", base)

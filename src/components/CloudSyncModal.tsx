@@ -18,6 +18,7 @@ import {
   Info,
   Shield,
   Layers,
+  Check,
 } from "lucide-react";
 import { CloudConfig, CloudBackupItem, CloudProviderType } from "../types";
 import { ApiService } from "../services/api";
@@ -65,8 +66,14 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
   // 历史备份列表与状态
   const [remoteBackups, setRemoteBackups] = useState<CloudBackupItem[]>([]);
   const [isLoadingBackups, setIsLoadingBackups] = useState(false);
-  const [isTesting, setIsTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; msg: string } | null>(null);
+
+  // 独立的 S3 与 WebDAV 测试状态与结果反馈（严格隔离，绝不串门）
+  const [isTestingS3, setIsTestingS3] = useState(false);
+  const [s3TestResult, setS3TestResult] = useState<{ success: boolean; msg: string } | null>(null);
+
+  const [isTestingDav, setIsTestingDav] = useState(false);
+  const [davTestResult, setDavTestResult] = useState<{ success: boolean; msg: string } | null>(null);
+
   const [isSaving, setIsSaving] = useState(false);
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [maskKeyOnUpload, setMaskKeyOnUpload] = useState(false);
@@ -76,19 +83,21 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
     (async () => {
       try {
         const cfg = await ApiService.getCloudConfig();
-        setProviderType(cfg.provider_type);
+        if (cfg.provider_type) {
+          setProviderType(cfg.provider_type);
+        }
         if (cfg.s3) {
-          setS3Endpoint(cfg.s3.endpoint);
-          setS3Bucket(cfg.s3.bucket);
+          setS3Endpoint(cfg.s3.endpoint || "");
+          setS3Bucket(cfg.s3.bucket || "");
           setS3Region(cfg.s3.region || "auto");
-          setS3AccessKey(cfg.s3.access_key);
-          setS3SecretKey(cfg.s3.secret_key);
+          setS3AccessKey(cfg.s3.access_key || "");
+          setS3SecretKey(cfg.s3.secret_key || "");
           setS3Prefix(cfg.s3.prefix || "zcode-backups/");
         }
         if (cfg.webdav) {
-          setDavUrl(cfg.webdav.server_url);
-          setDavUsername(cfg.webdav.username);
-          setDavPassword(cfg.webdav.password);
+          setDavUrl(cfg.webdav.server_url || "");
+          setDavUsername(cfg.webdav.username || "");
+          setDavPassword(cfg.webdav.password || "");
           setDavRemoteDir(cfg.webdav.remote_dir || "zcode-backups");
         }
         if (cfg.retention) {
@@ -120,9 +129,9 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
     }
   }, [activeTab]);
 
-  // 构造当前配置对象
-  const buildCurrentConfig = (): CloudConfig => ({
-    provider_type: providerType,
+  // 构造指定类型的云存储配置对象 (严格支持覆盖 targetType)
+  const buildCurrentConfig = (targetType?: CloudProviderType): CloudConfig => ({
+    provider_type: targetType || providerType,
     s3: {
       endpoint: s3Endpoint.trim(),
       bucket: s3Bucket.trim(),
@@ -143,24 +152,41 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
     },
   });
 
-  // 测试连接
-  const handleTestConnection = async () => {
-    setIsTesting(true);
-    setTestResult(null);
+  // 针对 S3 / R2 专门的连通性测试（绝不触发 WebDAV）
+  const handleTestS3 = async () => {
+    setIsTestingS3(true);
+    setS3TestResult(null);
     try {
-      const config = buildCurrentConfig();
+      const config = buildCurrentConfig("s3");
       const msg = await ApiService.testCloudConnection(config);
-      setTestResult({ success: true, msg });
-      onShowToast("success", "连接测试成功", msg);
+      setS3TestResult({ success: true, msg });
+      onShowToast("success", "S3/R2 连接成功", msg);
     } catch (e: any) {
-      setTestResult({ success: false, msg: e.message });
-      onShowToast("error", "连接测试失败", e.message);
+      setS3TestResult({ success: false, msg: e.message });
+      onShowToast("error", "S3/R2 连接失败", e.message);
     } finally {
-      setIsTesting(false);
+      setIsTestingS3(false);
     }
   };
 
-  // 保存配置
+  // 针对 WebDAV 专门的连通性测试（绝不触发 S3 / R2）
+  const handleTestWebDav = async () => {
+    setIsTestingDav(true);
+    setDavTestResult(null);
+    try {
+      const config = buildCurrentConfig("webdav");
+      const msg = await ApiService.testCloudConnection(config);
+      setDavTestResult({ success: true, msg });
+      onShowToast("success", "WebDAV 连接成功", msg);
+    } catch (e: any) {
+      setDavTestResult({ success: false, msg: e.message });
+      onShowToast("error", "WebDAV 连接失败", e.message);
+    } finally {
+      setIsTestingDav(false);
+    }
+  };
+
+  // 保存当前配置
   const handleSaveConfig = async () => {
     setIsSaving(true);
     try {
@@ -180,7 +206,11 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
     try {
       await handleSaveConfig();
       await onBackupNow(maskKeyOnUpload);
-      onShowToast("success", "云端备份成功", "已上传最新配置快照并执行过期清理");
+      onShowToast(
+        "success",
+        "云端备份成功",
+        `已成功将配置快照同步至 ${providerType === "s3" ? "S3/R2" : "WebDAV"} 并执行生命周期清理`
+      );
       if (activeTab === "history") {
         fetchRemoteBackups();
       }
@@ -241,8 +271,8 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                 </span>
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                当前挂载模式:{" "}
-                <span className="text-zinc-800 dark:text-zinc-200 font-medium">
+                当前同步生效源:{" "}
+                <span className="text-blue-600 dark:text-blue-400 font-semibold">
                   {providerType === "s3"
                     ? "☁️ S3 / Cloudflare R2"
                     : providerType === "webdav"
@@ -273,6 +303,9 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
           >
             <Server className="w-3.5 h-3.5" />
             <span>S3 / Cloudflare R2</span>
+            {providerType === "s3" && (
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" title="当前激活源" />
+            )}
           </button>
 
           <button
@@ -285,6 +318,9 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
           >
             <FolderSync className="w-3.5 h-3.5" />
             <span>WebDAV (坚果云/NAS)</span>
+            {providerType === "webdav" && (
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" title="当前激活源" />
+            )}
           </button>
 
           <button
@@ -322,20 +358,27 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
           {/* Tab 1: S3 / Cloudflare R2 */}
           {activeTab === "s3" && (
             <div className="space-y-3.5 animate-in fade-in duration-100">
-              <div className="flex items-center justify-between pb-2 border-b border-subtle">
-                <span className="text-zinc-700 dark:text-zinc-300 font-semibold">
-                  启用 S3 / R2 作为默认云存储源:
-                </span>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="cloud_type"
-                    checked={providerType === "s3"}
-                    onChange={() => setProviderType("s3")}
-                    className="text-blue-600 focus:ring-0"
-                  />
-                  <span className="font-medium text-zinc-900 dark:text-white">设为当前激活源</span>
-                </label>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-alt/60 border border-subtle">
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-700 dark:text-zinc-300 font-semibold">
+                    云备份存储源:
+                  </span>
+                  <span className="text-[11px] text-zinc-500">
+                    {providerType === "s3" ? "当前已激活 S3 / R2" : "当前未激活"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setProviderType("s3")}
+                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+                    providerType === "s3"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "bg-surface hover:bg-surface-hover text-zinc-700 dark:text-zinc-200 border border-subtle"
+                  }`}
+                >
+                  {providerType === "s3" && <Check className="w-3.5 h-3.5" />}
+                  <span>{providerType === "s3" ? "已激活 S3" : "设为同步激活源"}</span>
+                </button>
               </div>
 
               <div>
@@ -403,7 +446,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                       onClick={() => setShowSecretKey(!showSecretKey)}
                       className="text-[11px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 flex items-center gap-1"
                     >
-                      {showSecretKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                      {showSecretKey ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3 text-zinc-400" />}
                       <span>{showSecretKey ? "隐藏" : "显示"}</span>
                     </button>
                   </div>
@@ -429,26 +472,63 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                   className="w-full bg-input text-zinc-900 dark:text-zinc-100 font-mono text-xs rounded-lg px-3 py-2 border border-subtle focus:border-blue-500 focus:outline-none shadow-sm"
                 />
               </div>
+
+              {/* S3 专属测试连通性按钮与反馈 */}
+              <div className="pt-2 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleTestS3}
+                  disabled={isTestingS3}
+                  className="px-3.5 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white bg-surface hover:bg-surface-hover rounded-lg border border-subtle transition-all active:scale-95 disabled:opacity-50 shadow-sm"
+                >
+                  {isTestingS3 ? "正在测试 S3 / R2..." : "⚡ 测试 S3 / R2 连通性"}
+                </button>
+                <span className="text-[11px] text-zinc-500">仅校验上方 S3 / R2 端点与凭证，不影响 WebDAV</span>
+              </div>
+
+              {s3TestResult && (
+                <div
+                  className={`p-3 rounded-xl border text-xs flex items-center gap-2.5 transition-all ${
+                    s3TestResult.success
+                      ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
+                      : "bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-500/30 text-rose-800 dark:text-rose-300"
+                  }`}
+                >
+                  {s3TestResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                  )}
+                  <span className="font-medium leading-relaxed">{s3TestResult.msg}</span>
+                </div>
+              )}
             </div>
           )}
 
           {/* Tab 2: WebDAV */}
           {activeTab === "webdav" && (
             <div className="space-y-3.5 animate-in fade-in duration-100">
-              <div className="flex items-center justify-between pb-2 border-b border-subtle">
-                <span className="text-zinc-700 dark:text-zinc-300 font-semibold">
-                  启用 WebDAV 作为默认云存储源:
-                </span>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="cloud_type"
-                    checked={providerType === "webdav"}
-                    onChange={() => setProviderType("webdav")}
-                    className="text-blue-600 focus:ring-0"
-                  />
-                  <span className="font-medium text-zinc-900 dark:text-white">设为当前激活源</span>
-                </label>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-surface-alt/60 border border-subtle">
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-700 dark:text-zinc-300 font-semibold">
+                    云备份存储源:
+                  </span>
+                  <span className="text-[11px] text-zinc-500">
+                    {providerType === "webdav" ? "当前已激活 WebDAV" : "当前未激活"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setProviderType("webdav")}
+                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+                    providerType === "webdav"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "bg-surface hover:bg-surface-hover text-zinc-700 dark:text-zinc-200 border border-subtle"
+                  }`}
+                >
+                  {providerType === "webdav" && <Check className="w-3.5 h-3.5" />}
+                  <span>{providerType === "webdav" ? "已激活 WebDAV" : "设为同步激活源"}</span>
+                </button>
               </div>
 
               <div>
@@ -488,7 +568,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                       onClick={() => setShowDavPassword(!showDavPassword)}
                       className="text-[11px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 flex items-center gap-1"
                     >
-                      {showDavPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                      {showDavPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3 text-zinc-400" />}
                       <span>{showDavPassword ? "隐藏" : "显示"}</span>
                     </button>
                   </div>
@@ -514,6 +594,36 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
                   className="w-full bg-input text-zinc-900 dark:text-zinc-100 font-mono text-xs rounded-lg px-3 py-2 border border-subtle focus:border-blue-500 focus:outline-none shadow-sm"
                 />
               </div>
+
+              {/* WebDAV 专属测试连通性按钮与反馈 */}
+              <div className="pt-2 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleTestWebDav}
+                  disabled={isTestingDav}
+                  className="px-3.5 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white bg-surface hover:bg-surface-hover rounded-lg border border-subtle transition-all active:scale-95 disabled:opacity-50 shadow-sm"
+                >
+                  {isTestingDav ? "正在测试 WebDAV..." : "⚡ 测试 WebDAV 连通性"}
+                </button>
+                <span className="text-[11px] text-zinc-500">仅校验上方 WebDAV 地址与认证，绝不触发 S3 / R2</span>
+              </div>
+
+              {davTestResult && (
+                <div
+                  className={`p-3 rounded-xl border text-xs flex items-center gap-2.5 transition-all ${
+                    davTestResult.success
+                      ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
+                      : "bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-500/30 text-rose-800 dark:text-rose-300"
+                  }`}
+                >
+                  {davTestResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
+                  )}
+                  <span className="font-medium leading-relaxed">{davTestResult.msg}</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -582,7 +692,7 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
             <div className="space-y-3 animate-in fade-in duration-100">
               <div className="flex items-center justify-between">
                 <span className="text-zinc-500 dark:text-zinc-400 font-medium">
-                  云端存储的备份快照清单:
+                  云端存储的备份快照清单 ({providerType === "s3" ? "S3/R2" : "WebDAV"}):
                 </span>
                 <button
                   type="button"
@@ -645,24 +755,6 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
               </div>
             </div>
           )}
-
-          {/* 测试连通性反馈横条 */}
-          {testResult && (
-            <div
-              className={`p-3 rounded-xl border text-xs flex items-center gap-2.5 transition-all ${
-                testResult.success
-                  ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
-                  : "bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-500/30 text-rose-800 dark:text-rose-300"
-              }`}
-            >
-              {testResult.success ? (
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-              ) : (
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 dark:text-rose-400" />
-              )}
-              <span className="font-medium leading-relaxed">{testResult.msg}</span>
-            </div>
-          )}
         </div>
 
         {/* 底部按钮栏 */}
@@ -678,14 +770,28 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
           </label>
 
           <div className="flex items-center gap-2.5">
-            <button
-              type="button"
-              onClick={handleTestConnection}
-              disabled={isTesting}
-              className="px-3.5 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white bg-surface hover:bg-surface-hover rounded-lg border border-subtle transition-all active:scale-95 disabled:opacity-50 shadow-sm"
-            >
-              {isTesting ? "正在测试..." : "测试连通性"}
-            </button>
+            {/* 智能针对当前选项卡的测试按钮 */}
+            {activeTab === "s3" && (
+              <button
+                type="button"
+                onClick={handleTestS3}
+                disabled={isTestingS3}
+                className="px-3.5 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white bg-surface hover:bg-surface-hover rounded-lg border border-subtle transition-all active:scale-95 disabled:opacity-50 shadow-sm"
+              >
+                {isTestingS3 ? "正在测试 S3..." : "测试 S3 / R2"}
+              </button>
+            )}
+
+            {activeTab === "webdav" && (
+              <button
+                type="button"
+                onClick={handleTestWebDav}
+                disabled={isTestingDav}
+                className="px-3.5 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:text-zinc-900 dark:hover:text-white bg-surface hover:bg-surface-hover rounded-lg border border-subtle transition-all active:scale-95 disabled:opacity-50 shadow-sm"
+              >
+                {isTestingDav ? "正在测试 WebDAV..." : "测试 WebDAV"}
+              </button>
+            )}
 
             <button
               type="button"
@@ -704,7 +810,11 @@ export const CloudSyncModal: React.FC<CloudSyncModalProps> = ({
               className="px-4 py-1.5 text-xs font-bold text-white bg-primary hover:bg-primary-hover rounded-lg shadow-lg shadow-blue-600/20 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
             >
               <Upload className="w-3.5 h-3.5" />
-              <span>{isBackingUp ? "正在备份..." : "立即备份至云端"}</span>
+              <span>
+                {isBackingUp
+                  ? "正在备份..."
+                  : `备份至 ${providerType === "s3" ? "S3/R2" : "WebDAV"}`}
+              </span>
             </button>
           </div>
         </div>
