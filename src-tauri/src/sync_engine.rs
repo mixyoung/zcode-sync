@@ -393,3 +393,79 @@ impl SyncEngine {
         model_map
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_duplicate_analysis() {
+        let items = vec![
+            UnifiedProviderItem {
+                provider_id: "p1".into(),
+                name: "Provider 1".into(),
+                kind: "openai".into(),
+                models: vec!["model-shared".into(), "model-unique-1".into()],
+                enabled: true,
+                is_custom: true,
+                source_file: "file1.json".into(),
+                source_label: "F1".into(),
+                schema_type: "classic".into(),
+                raw_data: serde_json::json!({}),
+            },
+            UnifiedProviderItem {
+                provider_id: "p2".into(),
+                name: "Provider 2".into(),
+                kind: "anthropic".into(),
+                models: vec!["model-shared".into(), "model-unique-2".into()],
+                enabled: true,
+                is_custom: false,
+                source_file: "file2.json".into(),
+                source_label: "F2".into(),
+                schema_type: "modern".into(),
+                raw_data: serde_json::json!({}),
+            },
+        ];
+
+        let dups = SyncEngine::analyze_duplicate_models(&items);
+        assert_eq!(dups.len(), 1);
+        assert!(dups.contains_key("model-shared"));
+        assert_eq!(dups["model-shared"].len(), 2);
+    }
+
+    #[test]
+    fn test_atomic_write_and_backup() {
+        let tmp_dir = std::env::temp_dir().join(format!("zcode_rust_test_{}", std::process::id()));
+        let _ = fs::create_dir_all(&tmp_dir);
+        let test_file = tmp_dir.join("test_cfg.json");
+
+        let initial_json = serde_json::json!({
+            "provider": {
+                "test_p": { "name": "Initial" }
+            }
+        });
+
+        // 1. 验证原子写入
+        assert!(SyncEngine::atomic_write_json(&test_file, &initial_json).is_ok());
+        assert!(test_file.exists());
+
+        // 2. 验证备份生成
+        assert!(SyncEngine::create_backup(&test_file).is_ok());
+        assert!(tmp_dir.join("test_cfg.json.bak").exists());
+
+        // 3. 验证单项保存
+        let updated_item = serde_json::json!({
+            "name": "UpdatedName",
+            "kind": "openai",
+            "options": { "baseURL": "https://api.test.com", "apiKey": "sk-123" }
+        });
+        assert!(SyncEngine::save_single_provider(&test_file, "test_p", &updated_item).is_ok());
+
+        let read_back = fs::read_to_string(&test_file).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&read_back).unwrap();
+        assert_eq!(parsed["provider"]["test_p"]["name"], "UpdatedName");
+
+        let _ = fs::remove_dir_all(&tmp_dir);
+    }
+}

@@ -64,3 +64,74 @@ impl RetentionEngine {
         to_delete
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_timestamp() {
+        let name = "zcode-backup-20261009_153012.json";
+        let parsed = RetentionEngine::parse_backup_timestamp(name);
+        assert!(parsed.is_some());
+        let dt = parsed.unwrap();
+        assert_eq!(dt.format("%Y%m%d_%H%M%S").to_string(), "20261009_153012");
+    }
+
+    #[test]
+    fn test_retention_max_versions_with_safety_floor() {
+        let items = vec![
+            CloudBackupItem {
+                name: "zcode-backup-20261009_120000.json".into(),
+                size_bytes: 100,
+                last_modified: "".into(),
+                provider_count: 5,
+            },
+            CloudBackupItem {
+                name: "zcode-backup-20261008_120000.json".into(),
+                size_bytes: 100,
+                last_modified: "".into(),
+                provider_count: 5,
+            },
+            CloudBackupItem {
+                name: "zcode-backup-20261007_120000.json".into(),
+                size_bytes: 100,
+                last_modified: "".into(),
+                provider_count: 5,
+            },
+        ];
+
+        // 设定最多保留 2 份
+        let config = RetentionConfig {
+            max_versions: 2,
+            retention_days: 0,
+        };
+
+        let expired = RetentionEngine::calculate_expired_backups(&items, &config);
+        // 最老的 20261007 应该被淘汰，保留 20261009 与 20261008
+        assert_eq!(expired.len(), 1);
+        assert_eq!(expired[0], "zcode-backup-20261007_120000.json");
+    }
+
+    #[test]
+    fn test_retention_safety_floor_never_deletes_latest() {
+        let items = vec![
+            CloudBackupItem {
+                name: "zcode-backup-20200101_000000.json".into(), // 极老备份
+                size_bytes: 100,
+                last_modified: "".into(),
+                provider_count: 1,
+            },
+        ];
+
+        // 设定只保留 1 天以内
+        let config = RetentionConfig {
+            max_versions: 1,
+            retention_days: 1,
+        };
+
+        // 即使已超期，绝对底线保证：只剩 1 份时绝不删除！
+        let expired = RetentionEngine::calculate_expired_backups(&items, &config);
+        assert!(expired.is_empty(), "绝对底线保证：只剩 1 份时不应被清理");
+    }
+}

@@ -1,3 +1,0 @@
-# 运行本项目源码仅依赖 Python 3 标准库，无需额外包。
-# 仅在需要构建单文件可执行程序时需要 pyinstaller：
-pyinstaller>=6.0.0
