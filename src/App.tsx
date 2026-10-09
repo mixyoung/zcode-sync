@@ -13,6 +13,7 @@ import { FilterSearchToolbar } from "./components/FilterSearchToolbar";
 import { ProviderTable } from "./components/ProviderTable";
 import { ProviderEditModal } from "./components/ProviderEditModal";
 import { DuplicateModal } from "./components/DuplicateModal";
+import { CloudSyncModal } from "./components/CloudSyncModal";
 import { ActionConsole } from "./components/ActionConsole";
 import { Toast } from "./components/Toast";
 
@@ -31,6 +32,7 @@ export const App: React.FC = () => {
   // 弹窗状态
   const [editingItem, setEditingItem] = useState<UnifiedProviderItem | null>(null);
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState<boolean>(false);
+  const [isCloudModalOpen, setIsCloudModalOpen] = useState<boolean>(false);
   const [duplicates, setDuplicates] = useState<DuplicateAnalysisResult>({});
 
   // 浮动 Toast 状态
@@ -86,6 +88,8 @@ export const App: React.FC = () => {
     const view = params.get("view");
     if (view === "duplicate") {
       setIsDuplicateModalOpen(true);
+    } else if (view === "cloud") {
+      setIsCloudModalOpen(true);
     } else if (view === "edit" && providers.length > 0) {
       setEditingItem(providers[0]);
     }
@@ -109,15 +113,12 @@ export const App: React.FC = () => {
   // 过滤后的服务商列表
   const filteredProviders = useMemo(() => {
     return providers.filter((p) => {
-      // 1. 文件过滤
       if (selectedConfigPath !== "ALL" && p.source_file !== selectedConfigPath) {
         return false;
       }
-      // 2. 类型过滤
       if (filterType === "custom" && !p.is_custom) return false;
       if (filterType === "builtin" && p.is_custom) return false;
 
-      // 3. 搜索关键词
       if (searchQuery.trim()) {
         const kw = searchQuery.toLowerCase().trim();
         const mName = p.name.toLowerCase().includes(kw);
@@ -129,7 +130,6 @@ export const App: React.FC = () => {
     });
   }, [providers, selectedConfigPath, filterType, searchQuery]);
 
-  // 行选择切换
   const handleToggleSelect = (id: string, shiftKey: boolean) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -144,7 +144,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // 添加自定义文件
   const handleAddCustomFile = () => {
     const input = document.createElement("input");
     input.type = "file";
@@ -159,7 +158,6 @@ export const App: React.FC = () => {
     input.click();
   };
 
-  // 打开目录
   const handleOpenFolder = async () => {
     const target =
       selectedConfigPath === "ALL" && configs.length > 0
@@ -171,7 +169,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // 保存单项服务商
   const handleSaveProvider = async (updatedItem: UnifiedProviderItem) => {
     const msg = await ApiService.saveSingleProvider(
       updatedItem.source_file,
@@ -182,7 +179,6 @@ export const App: React.FC = () => {
     await loadData();
   };
 
-  // 删除单项服务商
   const handleDeleteSelected = async () => {
     if (selectedIds.length === 0) return;
     if (
@@ -209,7 +205,7 @@ export const App: React.FC = () => {
   };
 
   // 获取待导出的服务商字典
-  const getExportProviders = () => {
+  const getExportProviders = (maskKey: boolean = maskApiKey) => {
     const targetItems =
       selectedIds.length > 0
         ? providers.filter((p) => selectedIds.includes(p.provider_id))
@@ -218,7 +214,7 @@ export const App: React.FC = () => {
     const out: Record<string, any> = {};
     for (const it of targetItems) {
       const copyData = JSON.parse(JSON.stringify(it.raw_data));
-      if (maskApiKey && copyData.options && copyData.options.apiKey) {
+      if (maskKey && copyData.options && copyData.options.apiKey) {
         copyData.options.apiKey = "YOUR_API_KEY_HERE";
       }
       out[it.provider_id] = copyData;
@@ -226,7 +222,6 @@ export const App: React.FC = () => {
     return { provider: out };
   };
 
-  // 导出 JSON 文件
   const handleExportFile = () => {
     const data = getExportProviders();
     const count = Object.keys(data.provider).length;
@@ -252,7 +247,6 @@ export const App: React.FC = () => {
     );
   };
 
-  // 复制到系统剪贴板
   const handleCopyClipboard = async () => {
     const data = getExportProviders();
     const count = Object.keys(data.provider).length;
@@ -302,7 +296,6 @@ export const App: React.FC = () => {
     await loadData();
   };
 
-  // 从文件导入
   const handleImportFile = () => {
     const input = document.createElement("input");
     input.type = "file";
@@ -325,7 +318,6 @@ export const App: React.FC = () => {
     input.click();
   };
 
-  // 从剪贴板导入
   const handleImportClipboard = async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -340,6 +332,19 @@ export const App: React.FC = () => {
     }
   };
 
+  // 云端备份执行器
+  const handleCloudBackupNow = async (maskKey: boolean) => {
+    const payload = getExportProviders(maskKey);
+    const msg = await ApiService.uploadCloudBackup(payload);
+    addToast("success", "云端备份成功", msg);
+  };
+
+  // 云端备份恢复执行器
+  const handleRestoreFromCloud = async (backupData: any, fileName: string) => {
+    await executeImport(backupData, fileName);
+    setIsCloudModalOpen(false);
+  };
+
   return (
     <div className="h-screen w-screen flex flex-col p-4 bg-canvas text-zinc-900 dark:text-zinc-100 overflow-hidden space-y-3 transition-colors duration-150">
       {/* 1. 顶部状态栏与主题切换器 */}
@@ -349,6 +354,7 @@ export const App: React.FC = () => {
         totalProviders={providers.length}
         themeMode={themeMode}
         onThemeModeChange={setThemeMode}
+        onOpenCloudModal={() => setIsCloudModalOpen(true)}
       />
 
       {/* 2. 配置文件选择卡片 */}
@@ -409,6 +415,14 @@ export const App: React.FC = () => {
         duplicates={duplicates}
         isOpen={isDuplicateModalOpen}
         onClose={() => setIsDuplicateModalOpen(false)}
+      />
+
+      <CloudSyncModal
+        isOpen={isCloudModalOpen}
+        onClose={() => setIsCloudModalOpen(false)}
+        onBackupNow={handleCloudBackupNow}
+        onRestoreFromCloud={handleRestoreFromCloud}
+        onShowToast={addToast}
       />
 
       {/* 浮动通知 */}

@@ -83,3 +83,127 @@ pub struct ModelConfigRules {
     #[serde(rename = "manualProviderModelRules", default)]
     pub manual_provider_model_rules: Vec<serde_json::Value>,
 }
+
+// --- 云存储 S3/R2 与 WebDAV 模型 ---
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct S3Config {
+    #[serde(default)]
+    pub endpoint: String,
+    #[serde(default)]
+    pub bucket: String,
+    #[serde(default = "default_region")]
+    pub region: String,
+    #[serde(default)]
+    pub access_key: String,
+    #[serde(default)]
+    pub secret_key: String,
+    #[serde(default = "default_s3_prefix")]
+    pub prefix: String,
+}
+
+fn default_region() -> String {
+    "auto".to_string()
+}
+fn default_s3_prefix() -> String {
+    "zcode-backups/".to_string()
+}
+
+impl Default for S3Config {
+    fn default() -> Self {
+        Self {
+            endpoint: String::new(),
+            bucket: String::new(),
+            region: default_region(),
+            access_key: String::new(),
+            secret_key: String::new(),
+            prefix: default_s3_prefix(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct WebDavConfig {
+    #[serde(default)]
+    pub server_url: String,
+    #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub password: String,
+    #[serde(default = "default_webdav_dir")]
+    pub remote_dir: String,
+}
+
+fn default_webdav_dir() -> String {
+    "zcode-backups".to_string()
+}
+
+impl Default for WebDavConfig {
+    fn default() -> Self {
+        Self {
+            server_url: String::new(),
+            username: String::new(),
+            password: String::new(),
+            remote_dir: default_webdav_dir(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RetentionConfig {
+    #[serde(default = "default_max_versions")]
+    pub max_versions: u32,
+    #[serde(default = "default_retention_days")]
+    pub retention_days: u32,
+}
+
+fn default_max_versions() -> u32 {
+    10
+}
+fn default_retention_days() -> u32 {
+    30
+}
+
+impl Default for RetentionConfig {
+    fn default() -> Self {
+        Self {
+            max_versions: default_max_versions(),
+            retention_days: default_retention_days(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CloudConfig {
+    #[serde(default = "default_provider_type")]
+    pub provider_type: String, // "s3" | "webdav" | "none"
+    #[serde(default)]
+    pub s3: S3Config,
+    #[serde(default)]
+    pub webdav: WebDavConfig,
+    #[serde(default)]
+    pub retention: RetentionConfig,
+}
+
+fn default_provider_type() -> String {
+    "s3".to_string()
+}
+
+impl Default for CloudConfig {
+    fn default() -> Self {
+        Self {
+            provider_type: default_provider_type(),
+            s3: S3Config::default(),
+            webdav: WebDavConfig::default(),
+            retention: RetentionConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CloudBackupItem {
+    pub name: String,
+    pub size_bytes: u64,
+    pub last_modified: String,
+    pub provider_count: usize,
+}

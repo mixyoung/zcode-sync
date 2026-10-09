@@ -4,11 +4,11 @@
 [![Rust](https://img.shields.io/badge/Rust-1.93-orange.svg?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![React](https://img.shields.io/badge/React-19-61dafb.svg?logo=react&logoColor=black)](https://react.dev)
 [![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-v3.4-38bdf8.svg?logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
-[![程序体积](https://img.shields.io/badge/单文件体积-4.0_MB-success.svg)](https://github.com/mixyoung/zcode-sync/releases)
+[![程序体积](https://img.shields.io/badge/单文件体积-4.5_MB-success.svg)](https://github.com/mixyoung/zcode-sync/releases)
 [![开源许可](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-> 一个**体积极度轻量（仅 4.0 MB）、启动极快（<120ms）、视觉质感媲美 Raycast 与 Linear** 的专业级桌面端 ZCode 模型管理中心。
-> 采用 **Rust + Tauri v2 + React 19 + Tailwind CSS + Lucide 矢量图标** 架构重构，现已全面支持**黑白双主题与默认跟随系统主题**！
+> 一个**体积极度轻量（仅 4.5 MB）、启动极快（<120ms）、视觉质感媲美 Raycast 与 Linear** 的专业级桌面端 ZCode 模型管理中心。
+> 采用 **Rust + Tauri v2 + React 19 + Tailwind CSS + Lucide 矢量图标** 架构重构，现已全面支持 **S3 / Cloudflare R2** 与 **WebDAV** 云端同步备份、生命周期保留策略、以及黑白双主题跟随系统！
 
 ---
 
@@ -24,17 +24,26 @@
 | :---: | :---: |
 | ![浅色模式预览](docs/images/screenshot_light.png) | ![深色模式预览](docs/images/screenshot_dark.png) |
 
-### 服务商可视化与代码双向编辑抽屉 / 重复模型诊断
+### 云端同步中枢 / 服务商可视化与代码双向编辑抽屉
 
-| ✏️ 可视化表单与高级 JSON 抽屉 | ◈ 跨套餐与跨文件重复模型诊断 |
+| ☁️ S3 / Cloudflare R2 & WebDAV 云同步中枢 | ✏️ 可视化表单与高级 JSON 抽屉 |
 | :---: | :---: |
-| ![编辑服务商](docs/images/screenshot_edit.png) | ![重复模型诊断](docs/images/screenshot_duplicate.png) |
+| ![云同步中枢](docs/images/screenshot_cloud_sync.png) | ![编辑服务商](docs/images/screenshot_edit.png) |
 
 ---
 
 ## ✨ 核心特性
 
-- **⚡ 极致轻量单文件 (4.0 MB)**：
+- **☁️ S3 / Cloudflare R2 与 WebDAV 云端备份与同步 (新特性)**：
+  - **S3 / R2 兼容协议**：轻量自研 SigV4 HMAC-SHA256 签名，零冗余厚重 SDK。全面兼容 Cloudflare R2、AWS S3、MinIO、阿里云 OSS；
+  - **WebDAV 协议支持**：完美支持坚果云、Nextcloud、群晖/威联通 NAS、AList；
+  - **实时连通性测试**：一键握手测试存储桶或目录读写权限，弹窗提供明确排查指引。
+- **⏱️ 智能生命周期与保留策略 (新特性)**：
+  - **最大保留份数 (`max_versions`)**：支持设定保留最近 5 份、10 份 (默认)、20 份、50 份或不限制；
+  - **最长保留天数 (`retention_days`)**：支持设定保留 7 天、30 天 (默认)、90 天、180 天或永久保留；
+  - **绝对底线防空保护**：即使所有备份均已超出设定的天数，系统也绝不删除时间最近的至少 1 份完整备份，确保存储绝不为空；
+  - **云端版本历史列表**：随时查看云端快照、一键智能增量拉取合并至本地，或按需手动删除。
+- **⚡ 极致轻量单文件 (4.5 MB)**：
   - 彻底摆脱传统 Python 解释器与 Tcl/Tk 运行时的臃肿硬打包；
   - 采用纯 Rust 编译机器码 + 嵌入式静态资源 + 系统原生 Edge WebView2 渲染；
   - 开启 `opt-level = "z"`, `lto = true`, `strip = true` 极限瘦身优化，冷启动耗时 < 120ms。
@@ -62,7 +71,7 @@
 
 ## 🚀 运行方式
 
-### 方式 1：双击运行生成的单文件绿色程序（推荐，仅 4.0 MB）
+### 方式 1：双击运行生成的单文件绿色程序（推荐，仅 4.5 MB）
 直接运行本项目生成的原生可执行程序（无需安装任何 Python、Node 或 Rust 运行库）：
 ```text
 zcode-model-sync-tauri.exe   # 或 release/zcode-model-sync.exe
@@ -90,7 +99,7 @@ pnpm tauri dev
 pnpm tauri build --no-bundle
 ```
 构建产物将自动生成于：
-`src-tauri/target/release/zcode-model-sync.exe`（单文件体积约 4.0 MB）。
+`src-tauri/target/release/zcode-model-sync.exe`（单文件体积约 4.5 MB）。
 
 ---
 

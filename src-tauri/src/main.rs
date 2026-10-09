@@ -3,6 +3,7 @@
 mod models;
 mod path_detector;
 mod sync_engine;
+mod cloud_storage;
 mod commands;
 
 use commands::*;
@@ -17,6 +18,13 @@ fn main() {
             delete_single_provider,
             analyze_duplicates,
             open_folder,
+            get_cloud_config,
+            save_cloud_config,
+            test_cloud_connection,
+            upload_cloud_backup,
+            list_cloud_backups,
+            restore_cloud_backup,
+            delete_cloud_backup,
         ])
         .run(tauri::generate_context!())
         .expect("运行 Tauri 应用程序时发生错误");

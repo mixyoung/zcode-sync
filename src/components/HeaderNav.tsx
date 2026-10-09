@@ -1,5 +1,5 @@
 import React from "react";
-import { RefreshCw, Cpu, Laptop, Sun, Moon } from "lucide-react";
+import { RefreshCw, Cpu, Laptop, Sun, Moon, Cloud } from "lucide-react";
 import { ThemeMode } from "../services/theme";
 
 interface HeaderNavProps {
@@ -8,6 +8,7 @@ interface HeaderNavProps {
   totalProviders: number;
   themeMode: ThemeMode;
   onThemeModeChange: (mode: ThemeMode) => void;
+  onOpenCloudModal: () => void;
 }
 
 export const HeaderNav: React.FC<HeaderNavProps> = ({
@@ -16,6 +17,7 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
   totalProviders,
   themeMode,
   onThemeModeChange,
+  onOpenCloudModal,
 }) => {
   return (
     <header className="flex items-center justify-between pb-3 border-b border-subtle">
@@ -38,7 +40,17 @@ export const HeaderNav: React.FC<HeaderNavProps> = ({
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
+        {/* 云端同步与备份入口 */}
+        <button
+          onClick={onOpenCloudModal}
+          className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 transition-all active:scale-95 shadow-sm"
+          title="打开 S3 / R2 / WebDAV 云端备份与多端同步"
+        >
+          <Cloud className="w-3.5 h-3.5 text-blue-500" />
+          <span>云端备份同步</span>
+        </button>
+
         {/* 三段式黑白双主题与系统跟随切换胶囊 */}
         <div className="flex items-center p-0.5 rounded-lg bg-surface border border-subtle shadow-sm">
           <button

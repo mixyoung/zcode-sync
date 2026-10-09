@@ -88,7 +88,7 @@ export const FilterSearchToolbar: React.FC<FilterSearchToolbarProps> = ({
         <Sparkles className="w-3.5 h-3.5 text-amber-500 group-hover:rotate-12 transition-transform" />
         <span>重复模型诊断</span>
         {duplicateCount > 0 && (
-          <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30">
+          <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/30">
             {duplicateCount}
           </span>
         )}

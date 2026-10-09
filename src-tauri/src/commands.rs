@@ -1,8 +1,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use crate::models::{ConfigFileMeta, DuplicateReport, UnifiedProviderItem};
+use crate::models::{CloudBackupItem, CloudConfig, ConfigFileMeta, DuplicateReport, UnifiedProviderItem};
 use crate::path_detector::PathDetector;
 use crate::sync_engine::SyncEngine;
+use crate::cloud_storage::config_store::CloudConfigStore;
+use crate::cloud_storage::CloudManager;
 
 #[tauri::command]
 pub fn discover_configs(extra_paths: Option<Vec<String>>) -> Result<Vec<ConfigFileMeta>, String> {
@@ -79,4 +81,50 @@ pub fn open_folder(file_path: String) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+// --- 云端存储与备份 IPC 命令 ---
+
+#[tauri::command]
+pub fn get_cloud_config() -> Result<CloudConfig, String> {
+    Ok(CloudConfigStore::load_config())
+}
+
+#[tauri::command]
+pub fn save_cloud_config(config: CloudConfig) -> Result<String, String> {
+    CloudConfigStore::save_config(&config)?;
+    Ok("云端存储配置已安全保存至本地私有文件".to_string())
+}
+
+#[tauri::command]
+pub async fn test_cloud_connection(config: CloudConfig) -> Result<String, String> {
+    CloudManager::test_connection(&config).await
+}
+
+#[tauri::command]
+pub async fn upload_cloud_backup(payload: serde_json::Value) -> Result<String, String> {
+    let cfg = CloudConfigStore::load_config();
+    let json_bytes = serde_json::to_vec_pretty(&payload)
+        .map_err(|e| format!("序列化配置失败: {}", e))?;
+    CloudManager::upload_backup(&cfg, &json_bytes).await
+}
+
+#[tauri::command]
+pub async fn list_cloud_backups() -> Result<Vec<CloudBackupItem>, String> {
+    let cfg = CloudConfigStore::load_config();
+    CloudManager::list_backups(&cfg).await
+}
+
+#[tauri::command]
+pub async fn restore_cloud_backup(file_name: String) -> Result<serde_json::Value, String> {
+    let cfg = CloudConfigStore::load_config();
+    let bytes = CloudManager::download_backup(&cfg, &file_name).await?;
+    serde_json::from_slice(&bytes).map_err(|e| format!("解析云端备份内容失败: {}", e))
+}
+
+#[tauri::command]
+pub async fn delete_cloud_backup(file_name: String) -> Result<String, String> {
+    let cfg = CloudConfigStore::load_config();
+    CloudManager::delete_backup(&cfg, &file_name).await?;
+    Ok(format!("已从云端删除历史备份 [{}]", file_name))
 }

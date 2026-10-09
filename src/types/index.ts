@@ -49,3 +49,42 @@ export interface ToastMessage {
   title: string;
   message?: string;
 }
+
+// --- 云存储同步与生命周期保留策略类型 ---
+
+export type CloudProviderType = "s3" | "webdav" | "none";
+
+export interface S3Config {
+  endpoint: string;
+  bucket: string;
+  region: string;
+  access_key: string;
+  secret_key: string;
+  prefix: string;
+}
+
+export interface WebDavConfig {
+  server_url: string;
+  username: string;
+  password: string;
+  remote_dir: string;
+}
+
+export interface RetentionConfig {
+  max_versions: number; // 0 表示不限份数
+  retention_days: number; // 0 表示永久保留
+}
+
+export interface CloudConfig {
+  provider_type: CloudProviderType;
+  s3: S3Config;
+  webdav: WebDavConfig;
+  retention: RetentionConfig;
+}
+
+export interface CloudBackupItem {
+  name: string;
+  size_bytes: number;
+  last_modified: string;
+  provider_count: number;
+}

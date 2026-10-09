@@ -2,6 +2,8 @@ import {
   ConfigFileMeta,
   DuplicateAnalysisResult,
   UnifiedProviderItem,
+  CloudConfig,
+  CloudBackupItem,
 } from "../types";
 
 // 检测是否运行在 Tauri 桌面原生容器中
@@ -23,7 +25,7 @@ async function callTauri<T>(cmd: string, args?: Record<string, any>): Promise<T>
   throw new Error("NOT_IN_TAURI");
 }
 
-// 真实初始模拟数据（供 Web 独立调试与测试预览使用）
+// 模拟数据（供 Web 独立调试与测试预览使用）
 const MOCK_CONFIGS: ConfigFileMeta[] = [
   {
     path: "D:/program_files/zcode_data/.zcode/v2/provider_config.json",
@@ -166,6 +168,49 @@ let mockProviders: UnifiedProviderItem[] = [
   },
 ];
 
+let mockCloudConfig: CloudConfig = {
+  provider_type: "s3",
+  s3: {
+    endpoint: "https://example.r2.cloudflarestorage.com",
+    bucket: "zcode-backups",
+    region: "auto",
+    access_key: "AKIAIOSFODNN7EXAMPLE",
+    secret_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+    prefix: "zcode-backups/",
+  },
+  webdav: {
+    server_url: "https://dav.jianguoyun.com/dav/zcode/",
+    username: "user@example.com",
+    password: "app-password-example",
+    remote_dir: "zcode-backups",
+  },
+  retention: {
+    max_versions: 10,
+    retention_days: 30,
+  },
+};
+
+let mockCloudBackups: CloudBackupItem[] = [
+  {
+    name: "zcode-backup-20261009_153012.json",
+    size_bytes: 6842,
+    last_modified: "2026-10-09 15:30:12",
+    provider_count: 7,
+  },
+  {
+    name: "zcode-backup-20261008_214500.json",
+    size_bytes: 6710,
+    last_modified: "2026-10-08 21:45:00",
+    provider_count: 7,
+  },
+  {
+    name: "zcode-backup-20261007_182015.json",
+    size_bytes: 6520,
+    last_modified: "2026-10-07 18:20:15",
+    provider_count: 6,
+  },
+];
+
 export const ApiService = {
   async discoverConfigs(extraPaths?: string[]): Promise<ConfigFileMeta[]> {
     try {
@@ -263,6 +308,94 @@ export const ApiService = {
       await callTauri("open_folder", { filePath });
     } catch {
       console.log("[Mock] 打开目录:", filePath);
+    }
+  },
+
+  // --- 云存储 S3/R2 与 WebDAV IPC 接口 ---
+
+  async getCloudConfig(): Promise<CloudConfig> {
+    try {
+      return await callTauri<CloudConfig>("get_cloud_config");
+    } catch {
+      return mockCloudConfig;
+    }
+  },
+
+  async saveCloudConfig(config: CloudConfig): Promise<string> {
+    try {
+      return await callTauri<string>("save_cloud_config", { config });
+    } catch {
+      mockCloudConfig = config;
+      return "云端同步配置已保存至本地私有文件";
+    }
+  },
+
+  async testCloudConnection(config: CloudConfig): Promise<string> {
+    try {
+      return await callTauri<string>("test_cloud_connection", { config });
+    } catch {
+      if (config.provider_type === "s3") {
+        if (!config.s3.endpoint || !config.s3.bucket) {
+          throw new Error("S3 Endpoint 或 Bucket 不能为空");
+        }
+        return `[模拟测试] 成功连接 S3/R2 存储桶 [${config.s3.bucket}]，读写鉴权通过！`;
+      } else if (config.provider_type === "webdav") {
+        if (!config.webdav.server_url) {
+          throw new Error("WebDAV Server URL 不能为空");
+        }
+        return `[模拟测试] 成功连接 WebDAV 服务器 [${config.webdav.server_url}]，目录校验通过！`;
+      }
+      throw new Error("未选择有效的云存储服务商");
+    }
+  },
+
+  async uploadCloudBackup(payload: any): Promise<string> {
+    try {
+      return await callTauri<string>("upload_cloud_backup", { payload });
+    } catch {
+      const nowStr = new Date().toISOString().replace(/[-:T.]/g, "").slice(0, 15);
+      const name = `zcode-backup-${nowStr}.json`;
+      const newItem: CloudBackupItem = {
+        name,
+        size_bytes: JSON.stringify(payload).length,
+        last_modified: new Date().toLocaleString("zh-CN"),
+        provider_count: Object.keys(payload.provider || {}).length,
+      };
+      mockCloudBackups.unshift(newItem);
+      return `已成功备份至云端 [${name}]，已执行生命周期清理`;
+    }
+  },
+
+  async listCloudBackups(): Promise<CloudBackupItem[]> {
+    try {
+      return await callTauri<CloudBackupItem[]>("list_cloud_backups");
+    } catch {
+      return mockCloudBackups;
+    }
+  },
+
+  async restoreCloudBackup(fileName: string): Promise<any> {
+    try {
+      return await callTauri<any>("restore_cloud_backup", { fileName });
+    } catch {
+      return {
+        provider: {
+          mgw: {
+            name: "mgw",
+            kind: "anthropic-messages",
+            models: { "gemini-3.8-flash-high": {}, "gpt-5.6-terra": {} },
+          },
+        },
+      };
+    }
+  },
+
+  async deleteCloudBackup(fileName: string): Promise<string> {
+    try {
+      return await callTauri<string>("delete_cloud_backup", { fileName });
+    } catch {
+      mockCloudBackups = mockCloudBackups.filter((b) => b.name !== fileName);
+      return `已从云端删除历史备份 [${fileName}]`;
     }
   },
 };
